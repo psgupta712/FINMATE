@@ -41,7 +41,7 @@ app.use('/api/payments',      require('./routes/payments'));
 app.use('/api/subscriptions', require('./routes/subscriptions'));
 app.use('/api/chatbot',       require('./routes/chatbot'));
 app.use('/api/dashboard',     require('./routes/dashboard'));
-
+app.use('/api/receipt', require('./routes/receipt'));
 // ❤️ Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', time: new Date() });

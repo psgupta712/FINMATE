@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import AuthGuard from '../../components/layout/AuthGuard';
 import { dashboardAPI } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
+import { useTheme } from '../../lib/theme';
 import AlertBell from '../../components/AlertBell';
 import Link from 'next/link';
 
@@ -14,6 +15,7 @@ const CATEGORY_COLORS = {
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -41,8 +43,16 @@ export default function DashboardPage() {
           <p className="page-subtitle">Here's your financial overview for this month</p>
         </div>
 
-        {/* 🔔 Bell + Add Transaction side by side */}
+        {/* 🌙 Dark Mode + 🔔 Bell + Add Transaction */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <button
+            className="theme-toggle"
+            onClick={toggleTheme}
+            title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          >
+            {theme === 'dark' ? '☀️' : '🌙'}
+          </button>
           <AlertBell isPremium={user?.plan === 'premium'} />
           <Link href="/transactions" className="btn btn-primary">+ Add Transaction</Link>
         </div>
@@ -92,8 +102,12 @@ export default function DashboardPage() {
             ))}
           </div>
           <div style={{ display: 'flex', gap: '1rem', marginTop: '0.75rem', fontSize: '0.75rem' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ width: '10px', height: '10px', background: '#10b981', borderRadius: '2px', display: 'inline-block' }} /> Income</span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ width: '10px', height: '10px', background: '#ef4444', borderRadius: '2px', display: 'inline-block' }} /> Expense</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <span style={{ width: '10px', height: '10px', background: '#10b981', borderRadius: '2px', display: 'inline-block' }} /> Income
+            </span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <span style={{ width: '10px', height: '10px', background: '#ef4444', borderRadius: '2px', display: 'inline-block' }} /> Expense
+            </span>
           </div>
         </div>
 
@@ -141,7 +155,11 @@ export default function DashboardPage() {
               {recentTransactions.map(tx => (
                 <div key={tx._id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: tx.type === 'income' ? '#d1fae5' : '#fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px' }}>
+                    <div style={{
+                      width: '36px', height: '36px', borderRadius: '50%',
+                      background: tx.type === 'income' ? '#d1fae5' : '#fee2e2',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px'
+                    }}>
                       {tx.type === 'income' ? '📈' : '📉'}
                     </div>
                     <div>
@@ -196,7 +214,12 @@ export default function DashboardPage() {
 
       {/* Premium upsell */}
       {subscription.plan === 'free' && (
-        <div style={{ marginTop: '1.5rem', background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)', borderRadius: 'var(--radius)', padding: '1.25rem 1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{
+          marginTop: '1.5rem',
+          background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+          borderRadius: 'var(--radius)', padding: '1.25rem 1.5rem',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+        }}>
           <div>
             <h3 style={{ color: 'white', marginBottom: '4px', fontSize: '1rem' }}>Upgrade to Premium ⭐</h3>
             <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.85rem' }}>AI insights, PDF reports & smart alerts — just ₹99/month</p>

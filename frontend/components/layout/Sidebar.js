@@ -2,6 +2,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '../../lib/auth';
+import { useTheme } from '../../lib/theme';
 
 const NAV_ITEMS = [
   { href: '/dashboard',     icon: '📊', label: 'Dashboard' },
@@ -9,7 +10,7 @@ const NAV_ITEMS = [
   { href: '/budget',        icon: '📋', label: 'Budget' },
   { href: '/goals',         icon: '🎯', label: 'Goals' },
   { href: '/wallet',        icon: '👛', label: 'Wallet' },
-  { href: '/streaks',       icon: '🏆', label: 'Progress' },   // 🎮 NEW
+  { href: '/streaks',       icon: '🏆', label: 'Progress' },
   { href: '/chatbot',       icon: '🤖', label: 'AI Assistant' },
   { href: '/subscription',  icon: '⭐', label: 'Subscription' },
 ];
@@ -18,6 +19,7 @@ export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
 
   const handleLogout = () => {
     logout();
@@ -27,7 +29,17 @@ export default function Sidebar() {
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">
-        💰 <span>Fin<b>Bot</b></span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
+          💰 <span>Fin<b>Bot</b></span>
+        </span>
+        <button
+          className="theme-toggle"
+          onClick={toggleTheme}
+          title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+        >
+          {theme === 'dark' ? '☀️' : '🌙'}
+        </button>
       </div>
 
       <nav className="sidebar-nav">

@@ -44,17 +44,6 @@ export default function Sidebar() {
             {item.label}
           </Link>
         ))}
-
-        {/* Theme toggle as a nav item at the bottom of the nav */}
-        <button
-          onClick={toggleTheme}
-          className="nav-item"
-          style={{ background: 'none', border: 'none', width: '100%', textAlign: 'left', cursor: 'pointer' }}
-          title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-        >
-          <span className="icon">{theme === 'dark' ? '☀️' : '🌙'}</span>
-          {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
-        </button>
       </nav>
 
       {user && (

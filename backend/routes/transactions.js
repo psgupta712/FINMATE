@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const { protect } = require('../middleware/auth');
 const Transaction = require('../models/Transaction');
 const Budget = require('../models/Budget');
@@ -22,10 +23,14 @@ router.post('/', protect, async (req, res) => {
       date: date || Date.now(), paymentMethod, isRecurring, tags,
     });
 
-    // Update budget if expense
+    // Update budget category spent if expense
     if (type === 'expense') {
       const d = new Date(date || Date.now());
-      const budget = await Budget.findOne({ user: req.user._id, month: d.getMonth() + 1, year: d.getFullYear() });
+      const budget = await Budget.findOne({
+        user: req.user._id,
+        month: d.getMonth() + 1,
+        year: d.getFullYear(),
+      });
       if (budget) {
         const cat = budget.categories.find(c => c.name === category);
         if (cat) { cat.spent += amount; await budget.save(); }
@@ -35,7 +40,7 @@ router.post('/', protect, async (req, res) => {
     // 🎮 Gamification: process daily streak
     try {
       const streak = await getOrCreateStreak(req.user._id);
-      const xpGain = type === 'income' ? 15 : 10; // income logs give slightly more XP
+      const xpGain = type === 'income' ? 15 : 10;
       const { newBadges } = await processTransactionLog(streak, xpGain);
       return res.status(201).json({ success: true, transaction: tx, newBadges });
     } catch (gamErr) {
@@ -79,9 +84,21 @@ router.get('/summary', protect, async (req, res) => {
     const start = new Date(year, month - 1, 1);
     const end = new Date(year, month, 0, 23, 59, 59);
 
+    // ✅ Aggregate pipelines don't auto-cast ObjectId — must cast explicitly
     const summary = await Transaction.aggregate([
-      { $match: { user: req.user._id, date: { $gte: start, $lte: end } } },
-      { $group: { _id: { type: '$type', category: '$category' }, total: { $sum: '$amount' }, count: { $sum: 1 } } }
+      {
+        $match: {
+          user: new mongoose.Types.ObjectId(req.user._id),
+          date: { $gte: start, $lte: end },
+        }
+      },
+      {
+        $group: {
+          _id: { type: '$type', category: '$category' },
+          total: { $sum: '$amount' },
+          count: { $sum: 1 },
+        }
+      }
     ]);
 
     let totalIncome = 0, totalExpense = 0;
@@ -95,7 +112,15 @@ router.get('/summary', protect, async (req, res) => {
       }
     });
 
-    res.json({ success: true, totalIncome, totalExpense, savings: totalIncome - totalExpense, categoryBreakdown, month, year });
+    res.json({
+      success: true,
+      totalIncome,
+      totalExpense,
+      savings: totalIncome - totalExpense,
+      categoryBreakdown,
+      month: Number(month),
+      year: Number(year),
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

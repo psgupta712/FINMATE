@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const { protect } = require('../middleware/auth');
 const Transaction = require('../models/Transaction');
 const Goal = require('../models/Goal');
@@ -31,7 +32,7 @@ router.get('/', protect, async (req, res) => {
       Subscription.findOne({ user: req.user._id }).sort({ createdAt: -1 }),
     ]);
 
-    const totalIncome = transactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+    const totalIncome  = transactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
     const totalExpense = transactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
 
     // Category breakdown
@@ -40,11 +41,11 @@ router.get('/', protect, async (req, res) => {
       catMap[t.category] = (catMap[t.category] || 0) + t.amount;
     });
 
-    // Monthly trend (last 6 months)
+    // ✅ Aggregate pipelines don't auto-cast ObjectId — must cast explicitly
     const monthlyTrend = await Transaction.aggregate([
       {
         $match: {
-          user: req.user._id,
+          user: new mongoose.Types.ObjectId(req.user._id),
           date: { $gte: new Date(year, month - 7, 1) },
         }
       },
@@ -61,7 +62,7 @@ router.get('/', protect, async (req, res) => {
       const exp = monthlyTrend.find(t => t._id.month === m && t._id.year === y && t._id.type === 'expense');
       return {
         label: new Date(y, m - 1).toLocaleString('default', { month: 'short' }),
-        income: inc?.total || 0,
+        income:  inc?.total || 0,
         expense: exp?.total || 0,
       };
     });
@@ -74,22 +75,22 @@ router.get('/', protect, async (req, res) => {
       summary: {
         totalIncome,
         totalExpense,
-        savings: totalIncome - totalExpense,
+        savings:     totalIncome - totalExpense,
         savingsRate: totalIncome > 0 ? ((totalIncome - totalExpense) / totalIncome * 100).toFixed(1) : 0,
         walletBalance: wallet?.balance || 0,
       },
       categoryBreakdown: catMap,
       monthlyTrend: trend,
       goals: {
-        total: goals.length,
+        total:     goals.length,
         completed: goals.filter(g => g.isCompleted).length,
-        active: goals.filter(g => !g.isCompleted),
+        active:    goals.filter(g => !g.isCompleted),
       },
       budget: budget || null,
       recentTransactions: recentTx,
       subscription: {
-        plan: req.user.plan,
-        status: subscription?.status,
+        plan:    req.user.plan,
+        status:  subscription?.status,
         endDate: subscription?.endDate,
       },
     });

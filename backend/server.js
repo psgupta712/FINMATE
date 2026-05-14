@@ -35,8 +35,31 @@ const app = express();
 
 app.use(helmet());
 app.use(morgan('dev'));
+
+// ✅ CORS: allow the main CLIENT_URL plus Vercel preview URLs for the same project.
+// Set VERCEL_PROJECT_NAME in your backend env to match your Vercel project name,
+// e.g. "finbot" → allows https://finbot-*.vercel.app previews automatically.
+const allowedOrigins = [
+  process.env.CLIENT_URL,
+  'http://localhost:3000',
+];
+
+// Optionally allow all Vercel preview deployments for a project
+if (process.env.VERCEL_PROJECT_NAME) {
+  // This regex matches: https://finbot-abc123-yourteam.vercel.app
+  allowedOrigins.push(new RegExp(`^https://${process.env.VERCEL_PROJECT_NAME}[\\w-]*\\.vercel\\.app$`));
+}
+
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:3000',
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, curl, Razorpay webhooks)
+    if (!origin) return callback(null, true);
+    const allowed = allowedOrigins.some(o =>
+      typeof o === 'string' ? o === origin : o.test(origin)
+    );
+    if (allowed) return callback(null, true);
+    callback(new Error(`CORS blocked: ${origin}`));
+  },
   credentials: true,
 }));
 
@@ -75,7 +98,6 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Catch unhandled promise rejections — don't silently swallow them
 process.on('unhandledRejection', (reason) => {
   console.error('❌ Unhandled Promise Rejection:', reason);
 });

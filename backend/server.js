@@ -3,7 +3,10 @@ const dns = require('dns');
 dns.setServers(['8.8.8.8', '8.8.4.4']);
 dns.setDefaultResultOrder('ipv4first');
 
-// ✅ ENV VALIDATION — fail fast before anything loads
+// ✅ Load .env FIRST — before any validation that reads process.env
+require('dotenv').config();
+
+// ✅ ENV VALIDATION — now process.env is populated from .env
 const REQUIRED_ENV = [
   'MONGO_URI',
   'JWT_SECRET',
@@ -27,7 +30,6 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
-require('dotenv').config();
 
 const app = express();
 

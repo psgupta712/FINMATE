@@ -1,9 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  env: {
-    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api',
-  },
+  // NEXT_PUBLIC_* vars are automatically exposed to the browser bundle
+  // when set in .env / .env.local — no need to re-declare them here.
 };
 
 module.exports = nextConfig;

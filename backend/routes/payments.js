@@ -13,23 +13,16 @@ const getRazorpay = () => new Razorpay({
 
 // POST /api/payments/create-order  (wallet top-up)
 router.post('/create-order', protect, async (req, res) => {
-  console.log("USER:", req.user);
-
   try {
     const { amount } = req.body;
-    console.log("AMOUNT:", amount); // 🔍
-
     const razorpay = getRazorpay();
 
-    console.log("CREATING ORDER..."); // 🔍
     const order = await razorpay.orders.create({
       amount: Math.round(amount * 100),
       currency: 'INR',
       receipt: `rcpt_${Date.now()}`,
       notes: { userId: String(req.user._id), purpose: 'wallet_topup' },
     });
-
-    console.log("ORDER CREATED:", order); // 🔍
 
     const payment = await Payment.create({
       user: req.user._id,
@@ -40,8 +33,6 @@ router.post('/create-order', protect, async (req, res) => {
       status: 'created',
     });
 
-    console.log("PAYMENT SAVED:", payment); // 🔍
-
     res.json({
       success: true,
       orderId: order.id,
@@ -50,9 +41,8 @@ router.post('/create-order', protect, async (req, res) => {
       keyId: process.env.RAZORPAY_KEY_ID,
       paymentId: payment._id,
     });
-
   } catch (err) {
-    console.error("🔥 FULL ERROR:", err); // 🚨 VERY IMPORTANT
+    console.error('Create order error:', err);
     res.status(500).json({ success: false, message: err.message });
   }
 });
@@ -73,7 +63,6 @@ router.post('/verify', protect, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Payment verification failed' });
     }
 
-    // Find and update payment
     const payment = await Payment.findOne({ razorpayOrderId: razorpay_order_id, user: req.user._id });
     if (!payment) return res.status(404).json({ success: false, message: 'Payment record not found' });
     if (payment.status === 'paid') return res.status(400).json({ success: false, message: 'Payment already processed' });
@@ -85,6 +74,8 @@ router.post('/verify', protect, async (req, res) => {
 
     // Credit wallet
     const wallet = await Wallet.findOne({ user: req.user._id });
+    if (!wallet) return res.status(404).json({ success: false, message: 'Wallet not found' });
+
     wallet.balance += payment.amountInRupees;
     wallet.transactions.push({
       type: 'credit',
@@ -101,29 +92,65 @@ router.post('/verify', protect, async (req, res) => {
   }
 });
 
-// POST /api/payments/webhook  (Razorpay webhook - raw body)
-router.post('/webhook', async (req, res) => {
-  try {
-    const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
-    if (webhookSecret) {
-      const signature = req.headers['x-razorpay-signature'];
-      const body = req.body; // raw buffer
-      const expectedSig = crypto.createHmac('sha256', webhookSecret).update(body).digest('hex');
-      if (signature !== expectedSig) {
-        return res.status(400).json({ success: false, message: 'Invalid webhook signature' });
+// POST /api/payments/webhook  (Razorpay webhook)
+// NOTE: This route is mounted with express.raw() in server.js BEFORE express.json()
+// So req.body here is a raw Buffer — we must NOT use express.json() on this route.
+router.post('/webhook', (req, res) => {
+  // ✅ Razorpay webhooks are server-to-server — no CORS needed.
+  // But we must respond 200 quickly or Razorpay will retry.
+  (async () => {
+    try {
+      const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
+
+      // req.body is a Buffer because of express.raw() in server.js
+      const rawBody = req.body instanceof Buffer ? req.body : Buffer.from(JSON.stringify(req.body));
+
+      if (webhookSecret) {
+        const signature = req.headers['x-razorpay-signature'];
+        const expectedSig = crypto
+          .createHmac('sha256', webhookSecret)
+          .update(rawBody)
+          .digest('hex');
+
+        if (signature !== expectedSig) {
+          return res.status(400).json({ success: false, message: 'Invalid webhook signature' });
+        }
       }
-    }
 
-    const event = JSON.parse(req.body.toString());
-    if (event.event === 'payment.failed') {
-      const orderId = event.payload.payment.entity.order_id;
-      await Payment.findOneAndUpdate({ razorpayOrderId: orderId }, { status: 'failed' });
-    }
+      let event;
+      try {
+        event = JSON.parse(rawBody.toString());
+      } catch {
+        return res.status(400).json({ success: false, message: 'Invalid JSON payload' });
+      }
 
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
-  }
+      if (event.event === 'payment.failed') {
+        const orderId = event.payload?.payment?.entity?.order_id;
+        if (orderId) {
+          await Payment.findOneAndUpdate({ razorpayOrderId: orderId }, { status: 'failed' });
+        }
+      }
+
+      if (event.event === 'payment.captured') {
+        // Secondary safety net: mark payment as paid if verify endpoint was missed
+        const paymentId = event.payload?.payment?.entity?.id;
+        const orderId = event.payload?.payment?.entity?.order_id;
+        if (paymentId && orderId) {
+          const payment = await Payment.findOne({ razorpayOrderId: orderId });
+          if (payment && payment.status !== 'paid') {
+            payment.status = 'paid';
+            payment.razorpayPaymentId = paymentId;
+            await payment.save();
+          }
+        }
+      }
+
+      res.json({ success: true });
+    } catch (err) {
+      console.error('Webhook error:', err);
+      res.status(500).json({ success: false, message: err.message });
+    }
+  })();
 });
 
 // GET /api/payments/history

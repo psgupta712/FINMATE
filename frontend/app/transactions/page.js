@@ -1,282 +1,197 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import AuthGuard from '../../components/layout/AuthGuard';
-import BadgeToast from '../../components/BadgeToast';
 import { transactionsAPI } from '../../lib/api';
-import { useAuth } from '../../lib/auth';
-import Link from 'next/link';
+import BadgeToast from '../../components/BadgeToast';
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
-
-const CATEGORIES = ['Food & Dining','Transport','Education','Entertainment','Shopping','Health','Utilities','Rent','Subscription','Investment','Freelance','Scholarship','Part-time Job','Family Support','Refund','Other'];
-const PAYMENT_METHODS = ['cash','upi','card','wallet','netbanking','other'];
-const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-
+const CATEGORIES = [
+  'Food & Dining', 'Transport', 'Education', 'Entertainment',
+  'Shopping', 'Health', 'Utilities', 'Rent', 'Subscription',
+  'Investment', 'Freelance', 'Scholarship', 'Part-time Job',
+  'Family Support', 'Refund', 'Other',
+];
+const PAYMENT_METHODS = ['cash', 'upi', 'card', 'wallet', 'netbanking', 'other'];
 const EMPTY_FORM = {
-  type: 'expense', amount: '', category: 'Other', description: '',
-  date: new Date().toISOString().split('T')[0], paymentMethod: 'upi',
+  type: 'expense', amount: '', category: 'Other',
+  description: '', date: new Date().toISOString().split('T')[0],
+  paymentMethod: 'other', isRecurring: false, tags: '',
 };
 
-// ─── Receipt Scanner Modal (unchanged) ───────────────────────────────────────
-function ReceiptScannerModal({ onClose, onFill }) {
-  const fileRef = useRef(null);
-  const [preview, setPreview] = useState(null);
+export default function TransactionsPage() {
+  const [transactions, setTransactions] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState('');
+  const [newBadges, setNewBadges] = useState([]);
+  const [page, setPage] = useState(1);
+  const [filters, setFilters] = useState({ type: '', category: '', startDate: '', endDate: '' });
   const [scanning, setScanning] = useState(false);
-  const [error, setError] = useState('');
+  const fileRef = useRef(null);
 
-  const handleFile = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith('image/')) { setError('Please upload an image file'); return; }
-    if (file.size > 5 * 1024 * 1024) { setError('Image too large. Max 5MB.'); return; }
-    setError('');
-    const reader = new FileReader();
-    reader.onload = (ev) => setPreview(ev.target.result);
-    reader.readAsDataURL(file);
-  };
+  const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
 
-  const handleScan = async () => {
-    if (!preview) return;
-    setScanning(true); setError('');
+  const fetchTransactions = async (p = 1) => {
+    setLoading(true);
     try {
-      const token = localStorage.getItem('finMate_token');
-      const res = await fetch(`${BASE_URL}/receipt/scan`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ imageBase64: preview }),
-      });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.message);
-      onFill(data.data); onClose();
-    } catch (err) {
-      setError(err.message || 'Scan failed.');
-    } finally { setScanning(false); }
-  };
-
-  return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '1rem' }}>
-      <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius-lg)', padding: '1.75rem', width: '100%', maxWidth: '460px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-          <h3 style={{ fontSize: '1.1rem', fontWeight: '700' }}>📷 Scan Receipt</h3>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.3rem', cursor: 'pointer', color: 'var(--text-3)' }}>✕</button>
-        </div>
-        <p style={{ fontSize: '0.85rem', color: 'var(--text-2)', marginBottom: '1.25rem', lineHeight: '1.6' }}>
-          Upload a photo of your receipt. AI will extract amount, date, and category automatically.
-        </p>
-        <div onClick={() => fileRef.current?.click()} style={{ border: `2px dashed ${preview ? 'var(--primary)' : 'var(--border)'}`, borderRadius: 'var(--radius)', padding: '1.5rem', textAlign: 'center', cursor: 'pointer', marginBottom: '1rem', background: preview ? 'var(--primary-light)' : 'var(--surface-2)', minHeight: '160px', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-          {preview ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={preview} alt="Receipt preview" style={{ maxHeight: '220px', maxWidth: '100%', borderRadius: 'var(--radius-sm)', objectFit: 'contain' }} />
-          ) : (
-            <div><div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>🧾</div><p style={{ color: 'var(--text-2)', fontSize: '0.875rem', fontWeight: '500' }}>Click to upload receipt image</p><p style={{ color: 'var(--text-3)', fontSize: '0.78rem', marginTop: '4px' }}>JPG, PNG, WEBP · Max 5MB</p></div>
-          )}
-        </div>
-        <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleFile} />
-        {error && <div style={{ background: '#fee2e2', color: '#991b1b', borderRadius: 'var(--radius-sm)', padding: '0.6rem 0.875rem', fontSize: '0.83rem', marginBottom: '1rem' }}>⚠️ {error}</div>}
-        <div style={{ display: 'flex', gap: '0.75rem' }}>
-          <button className="btn btn-outline" style={{ flex: 1 }} onClick={onClose}>Cancel</button>
-          <button className="btn btn-primary" style={{ flex: 2 }} onClick={handleScan} disabled={!preview || scanning}>
-            {scanning ? <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><span style={{ display: 'inline-block', width: '14px', height: '14px', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: 'white', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />Scanning…</span> : '✨ Scan & Auto-fill'}
-          </button>
-        </div>
-      </div>
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-    </div>
-  );
-}
-
-// ─── Export Dropdown (new) ────────────────────────────────────────────────────
-function ExportButton({ isPremium }) {
-  const [open, setOpen] = useState(false);
-  const [exporting, setExporting] = useState('');
-  const now = new Date();
-  const [month, setMonth] = useState(now.getMonth() + 1);
-  const [year, setYear]   = useState(now.getFullYear());
-
-  // Free users: redirect to subscription page
-  if (!isPremium) {
-    return (
-      <Link href="/subscription" className="btn btn-outline" style={{ fontSize: '0.85rem' }} title="Premium feature">
-        📥 Export ⭐
-      </Link>
-    );
-  }
-
-  const doExport = async (type) => {
-    setExporting(type);
-    setOpen(false);
-    try {
-      const token = localStorage.getItem('finMate_token');
-      const url = `${BASE_URL}/export/${type}?month=${month}&year=${year}`;
-      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.message);
-      }
-
-      if (type === 'csv') {
-        const blob = await res.blob();
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = `finmate-report-${MONTHS[month - 1].toLowerCase()}-${year}.csv`;
-        link.click();
-        URL.revokeObjectURL(link.href);
-      } else {
-        // PDF — open styled HTML in new tab, user clicks "Save as PDF"
-        const html = await res.text();
-        const win = window.open('', '_blank');
-        win.document.write(html);
-        win.document.close();
-      }
-    } catch (err) {
-      alert(err.message || 'Export failed. Please try again.');
+      const params = { page: p, limit: 20, ...Object.fromEntries(Object.entries(filters).filter(([, v]) => v)) };
+      const data = await transactionsAPI.list(params);
+      setTransactions(data.transactions);
+      setTotal(data.total);
+      setPage(p);
+    } catch {
+      showToast('Failed to load transactions');
     } finally {
-      setExporting('');
+      setLoading(false);
     }
   };
 
-  return (
-    <div style={{ position: 'relative' }}>
-      <button
-        className="btn btn-outline"
-        style={{ fontSize: '0.85rem' }}
-        onClick={() => setOpen(o => !o)}
-        disabled={!!exporting}
-      >
-        {exporting ? `⏳ Exporting…` : '📥 Export Report'}
-      </button>
+  useEffect(() => { fetchTransactions(1); }, [filters]);
 
-      {open && (
-        <>
-          {/* backdrop to close on outside click */}
-          <div style={{ position: 'fixed', inset: 0, zIndex: 99 }} onClick={() => setOpen(false)} />
-          <div style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, zIndex: 100, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-md)', padding: '1rem', minWidth: '240px' }}>
-            <p style={{ fontSize: '0.8rem', fontWeight: '600', marginBottom: '10px', color: 'var(--text-2)' }}>Select period</p>
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
-              <select className="form-input" style={{ flex: 2 }} value={month} onChange={e => setMonth(Number(e.target.value))}>
-                {MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
-              </select>
-              <select className="form-input" style={{ flex: 1 }} value={year} onChange={e => setYear(Number(e.target.value))}>
-                {[2023, 2024, 2025, 2026].map(y => <option key={y}>{y}</option>)}
-              </select>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={() => doExport('pdf')}>🖨️ Download PDF</button>
-              <button className="btn btn-outline" style={{ width: '100%', justifyContent: 'center' }} onClick={() => doExport('csv')}>📊 Download CSV</button>
-            </div>
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
-// ─── Main Page ────────────────────────────────────────────────────────────────
-export default function TransactionsPage() {
-  const { user } = useAuth();
-  const isPremium = user?.plan === 'premium';
-
-  const [transactions, setTransactions] = useState([]);
-  const [loading, setLoading]     = useState(true);
-  const [showForm, setShowForm]   = useState(false);
-  const [showScanner, setShowScanner] = useState(false);
-  const [form, setForm]           = useState(EMPTY_FORM);
-  const [saving, setSaving]       = useState(false);
-  const [toast, setToast]         = useState('');
-  const [filter, setFilter]       = useState({ type: '', category: '' });
-  const [newBadges, setNewBadges] = useState([]);   // 🎮
-
-  const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 3500); };
-
-  const fetchTx = async () => {
-    setLoading(true);
-    try {
-      const params = {};
-      if (filter.type) params.type = filter.type;
-      if (filter.category) params.category = filter.category;
-      const data = await transactionsAPI.list(params);
-      setTransactions(data.transactions);
-    } catch (e) { showToast('Failed to load'); }
-    finally { setLoading(false); }
-  };
-
-  useEffect(() => { fetchTx(); }, [filter]);
-
-  const handleScanFill = (scanned) => {
-    setForm({ type: 'expense', amount: scanned.amount ? String(scanned.amount) : '', category: scanned.category || 'Other', description: scanned.description || '', date: scanned.date || new Date().toISOString().split('T')[0], paymentMethod: scanned.paymentMethod || 'other' });
-    setShowForm(true);
-    showToast(scanned.confidence === 'low' ? '⚠️ Low confidence scan — please review before saving.' : '✅ Receipt scanned! Verify and save.');
-  };
-
-  const handleAdd = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.amount || Number(form.amount) <= 0) return showToast('Enter a valid amount');
     setSaving(true);
     try {
-      const response = await transactionsAPI.add({ ...form, amount: Number(form.amount) });
+      const payload = {
+        ...form,
+        amount: Number(form.amount),
+        tags: form.tags ? form.tags.split(',').map(t => t.trim()).filter(Boolean) : [],
+      };
+      const data = await transactionsAPI.add(payload);
+      if (data.newBadges?.length) setNewBadges(data.newBadges);
       showToast('✅ Transaction added!');
-      // 🎮 Show badge celebration if any earned
-      if (response.newBadges?.length) setNewBadges(response.newBadges);
       setForm(EMPTY_FORM);
       setShowForm(false);
-      fetchTx();
-    } catch (err) { showToast(err.message); }
-    finally { setSaving(false); }
+      fetchTransactions(1);
+    } catch (err) {
+      showToast(err.message);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDelete = async (id) => {
     if (!confirm('Delete this transaction?')) return;
-    try { await transactionsAPI.delete(id); fetchTx(); showToast('Deleted'); } catch (e) { showToast('Delete failed'); }
+    try {
+      await transactionsAPI.delete(id);
+      showToast('Deleted');
+      fetchTransactions(page);
+    } catch {
+      showToast('Delete failed');
+    }
   };
 
-  const totalIncome  = transactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
-  const totalExpense = transactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+  const handleReceiptScan = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setScanning(true);
+    try {
+      const reader = new FileReader();
+      reader.onload = async (ev) => {
+        try {
+          const base64 = ev.target.result;
+          const token = localStorage.getItem('finMate_token');
+          const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+          const res = await fetch(`${BASE_URL}/receipt/scan`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ imageBase64: base64 }),
+          });
+          const data = await res.json();
+          if (!data.success) throw new Error(data.message);
+          const { amount, date, description, category, paymentMethod } = data.data;
+          setForm(f => ({ ...f, amount: String(amount), date, description, category, paymentMethod }));
+          setShowForm(true);
+          showToast('📷 Receipt scanned! Review and confirm.');
+        } catch (err) {
+          showToast(`Scan failed: ${err.message}`);
+        } finally {
+          setScanning(false);
+        }
+      };
+      reader.readAsDataURL(file);
+    } catch {
+      setScanning(false);
+      showToast('Could not read file');
+    }
+    e.target.value = '';
+  };
+
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const totalPages = Math.ceil(total / 20);
 
   return (
     <AuthGuard>
-      {showScanner && <ReceiptScannerModal onClose={() => setShowScanner(false)} onFill={handleScanFill} />}
-      {/* 🎮 Badge celebration toast */}
-      <BadgeToast badges={newBadges} onDone={() => setNewBadges([])} />
-
       <div className="page-header">
         <div>
           <h1 className="page-title">Transactions 💳</h1>
-          <p className="page-subtitle">Track all your income and expenses</p>
+          <p className="page-subtitle">{total} transactions total</p>
         </div>
-        {/* All 3 buttons preserved */}
-        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-          <ExportButton isPremium={isPremium} />
-          <button className="btn btn-outline" onClick={() => setShowScanner(true)}>📷 Scan Receipt</button>
-          <button className="btn btn-primary" onClick={() => { setShowForm(!showForm); setForm(EMPTY_FORM); }}>
+        <div style={{ display: 'flex', gap: '0.75rem' }}>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            style={{ display: 'none' }}
+            onChange={handleReceiptScan}
+          />
+          <button
+            className="btn btn-outline"
+            onClick={() => fileRef.current?.click()}
+            disabled={scanning}
+          >
+            {scanning ? '⏳ Scanning...' : '📷 Scan Receipt'}
+          </button>
+          <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>
             {showForm ? '✕ Cancel' : '+ Add Transaction'}
           </button>
         </div>
       </div>
 
-      <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
-        <div className="stat-card"><div className="stat-label">Income</div><div className="stat-value green">₹{totalIncome.toLocaleString()}</div></div>
-        <div className="stat-card"><div className="stat-label">Expenses</div><div className="stat-value red">₹{totalExpense.toLocaleString()}</div></div>
-        <div className="stat-card"><div className="stat-label">Net</div><div className={`stat-value ${totalIncome - totalExpense >= 0 ? 'green' : 'red'}`}>₹{(totalIncome - totalExpense).toLocaleString()}</div></div>
-      </div>
-
+      {/* Add Transaction Form */}
       {showForm && (
         <div className="card" style={{ marginBottom: '1.5rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
-            <h3 style={{ fontSize: '1rem', fontWeight: '600' }}>Add Transaction</h3>
-            <button type="button" className="btn btn-outline btn-sm" onClick={() => setShowScanner(true)} style={{ fontSize: '0.8rem' }}>📷 Scan Receipt Instead</button>
+          <h3 style={{ fontWeight: '600', marginBottom: '1rem' }}>New Transaction</h3>
+
+          {/* Type toggle */}
+          <div style={{ display: 'flex', gap: '4px', marginBottom: '1rem', background: 'var(--surface-2)', borderRadius: 'var(--radius-sm)', padding: '4px', width: 'fit-content' }}>
+            {['expense', 'income'].map(t => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setForm(f => ({ ...f, type: t }))}
+                className={form.type === t ? 'btn btn-primary btn-sm' : 'btn btn-sm'}
+                style={{ textTransform: 'capitalize', border: 'none' }}
+              >
+                {t === 'expense' ? '📉 Expense' : '📈 Income'}
+              </button>
+            ))}
           </div>
-          <form onSubmit={handleAdd} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+
+          <form onSubmit={handleSubmit} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
             <div className="form-group">
-              <label className="form-label">Type</label>
-              <select className="form-input" value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}>
-                <option value="expense">💸 Expense</option>
-                <option value="income">💰 Income</option>
-              </select>
+              <label className="form-label">Amount (₹) *</label>
+              <input
+                className="form-input"
+                type="number"
+                placeholder="0.00"
+                value={form.amount}
+                onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
+                required min="0.01" step="0.01"
+              />
             </div>
             <div className="form-group">
-              <label className="form-label">Amount (₹)</label>
-              <input className="form-input" type="number" placeholder="0.00" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} min="0.01" step="0.01" required />
+              <label className="form-label">Date *</label>
+              <input
+                className="form-input"
+                type="date"
+                value={form.date}
+                onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
+                required
+              />
             </div>
             <div className="form-group">
               <label className="form-label">Category</label>
@@ -285,68 +200,151 @@ export default function TransactionsPage() {
               </select>
             </div>
             <div className="form-group">
-              <label className="form-label">Date</label>
-              <input className="form-input" type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
-            </div>
-            <div className="form-group">
               <label className="form-label">Payment Method</label>
               <select className="form-input" value={form.paymentMethod} onChange={e => setForm(f => ({ ...f, paymentMethod: e.target.value }))}>
-                {PAYMENT_METHODS.map(m => <option key={m}>{m}</option>)}
+                {PAYMENT_METHODS.map(m => <option key={m} value={m}>{m.charAt(0).toUpperCase() + m.slice(1)}</option>)}
               </select>
             </div>
-            <div className="form-group">
+            <div className="form-group" style={{ gridColumn: '1 / -1' }}>
               <label className="form-label">Description</label>
-              <input className="form-input" placeholder="e.g. Lunch at canteen" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+              <input
+                className="form-input"
+                placeholder="What was this for?"
+                value={form.description}
+                onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+              />
             </div>
-            <div style={{ gridColumn: '1 / -1' }}>
-              <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving...' : '✅ Save Transaction'}</button>
+            <div className="form-group">
+              <label className="form-label">Tags (comma-separated)</label>
+              <input
+                className="form-input"
+                placeholder="e.g. college, food"
+                value={form.tags}
+                onChange={e => setForm(f => ({ ...f, tags: e.target.value }))}
+              />
+            </div>
+            <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '10px', paddingTop: '1.5rem' }}>
+              <input
+                type="checkbox"
+                id="recurring"
+                checked={form.isRecurring}
+                onChange={e => setForm(f => ({ ...f, isRecurring: e.target.checked }))}
+              />
+              <label htmlFor="recurring" style={{ fontSize: '0.875rem', cursor: 'pointer' }}>Recurring transaction</label>
+            </div>
+            <div style={{ gridColumn: '1 / -1', display: 'flex', gap: '0.75rem' }}>
+              <button type="submit" className="btn btn-primary" disabled={saving}>
+                {saving ? '⏳ Saving...' : '💾 Save Transaction'}
+              </button>
+              <button type="button" className="btn btn-outline" onClick={() => setShowForm(false)}>Cancel</button>
             </div>
           </form>
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
-        <select className="form-input" style={{ width: 'auto' }} value={filter.type} onChange={e => setFilter(f => ({ ...f, type: e.target.value }))}>
-          <option value="">All Types</option>
-          <option value="income">Income</option>
-          <option value="expense">Expense</option>
-        </select>
-        <select className="form-input" style={{ width: 'auto' }} value={filter.category} onChange={e => setFilter(f => ({ ...f, category: e.target.value }))}>
-          <option value="">All Categories</option>
-          {CATEGORIES.map(c => <option key={c}>{c}</option>)}
-        </select>
-      </div>
-
-      <div className="card" style={{ padding: 0 }}>
-        {loading ? (
-          <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-3)' }}>Loading...</div>
-        ) : transactions.length === 0 ? (
-          <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-3)' }}>
-            <div style={{ fontSize: '3rem', marginBottom: '0.75rem' }}>📭</div>
-            <p style={{ fontWeight: '500', marginBottom: '0.5rem' }}>No transactions yet</p>
-            <p style={{ fontSize: '0.875rem' }}>Add one manually or <button onClick={() => setShowScanner(true)} style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', fontSize: '0.875rem', fontWeight: '500', padding: 0 }}>scan a receipt 📷</button></p>
+      {/* Filters */}
+      <div className="card" style={{ marginBottom: '1.25rem', padding: '1rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.75rem', alignItems: 'end' }}>
+          <div>
+            <label className="form-label">Type</label>
+            <select className="form-input" value={filters.type} onChange={e => setFilters(f => ({ ...f, type: e.target.value }))}>
+              <option value="">All</option>
+              <option value="income">Income</option>
+              <option value="expense">Expense</option>
+            </select>
           </div>
-        ) : (
-          <table className="table">
-            <thead>
-              <tr><th>Date</th><th>Description</th><th>Category</th><th>Method</th><th>Amount</th><th></th></tr>
-            </thead>
-            <tbody>
-              {transactions.map(tx => (
-                <tr key={tx._id}>
-                  <td style={{ color: 'var(--text-3)', fontSize: '0.82rem' }}>{new Date(tx.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
-                  <td style={{ fontWeight: '500', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tx.description || '—'}</td>
-                  <td><span style={{ background: 'var(--surface-2)', borderRadius: '999px', padding: '2px 10px', fontSize: '0.78rem', fontWeight: '500' }}>{tx.category}</span></td>
-                  <td style={{ color: 'var(--text-3)', fontSize: '0.82rem', textTransform: 'capitalize' }}>{tx.paymentMethod}</td>
-                  <td><span style={{ fontWeight: '600', color: tx.type === 'income' ? 'var(--success)' : 'var(--danger)' }}>{tx.type === 'income' ? '+' : '−'}₹{tx.amount.toLocaleString()}</span></td>
-                  <td><button onClick={() => handleDelete(tx._id)} className="btn btn-sm" style={{ color: 'var(--danger)', border: 'none', background: 'none', padding: '4px 8px' }}>🗑️</button></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div>
+            <label className="form-label">Category</label>
+            <select className="form-input" value={filters.category} onChange={e => setFilters(f => ({ ...f, category: e.target.value }))}>
+              <option value="">All</option>
+              {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="form-label">From</label>
+            <input className="form-input" type="date" value={filters.startDate} onChange={e => setFilters(f => ({ ...f, startDate: e.target.value }))} />
+          </div>
+          <div>
+            <label className="form-label">To</label>
+            <input className="form-input" type="date" value={filters.endDate} onChange={e => setFilters(f => ({ ...f, endDate: e.target.value }))} />
+          </div>
+        </div>
+        {(filters.type || filters.category || filters.startDate || filters.endDate) && (
+          <button className="btn btn-outline btn-sm" style={{ marginTop: '0.75rem' }} onClick={() => setFilters({ type: '', category: '', startDate: '', endDate: '' })}>
+            Clear Filters
+          </button>
         )}
       </div>
 
+      {/* Transaction List */}
+      <div className="card">
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-3)' }}>Loading...</div>
+        ) : transactions.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '3rem' }}>
+            <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>💳</div>
+            <h3 style={{ marginBottom: '0.5rem' }}>No transactions found</h3>
+            <p style={{ color: 'var(--text-2)', marginBottom: '1.5rem' }}>Start by adding your first transaction.</p>
+            <button className="btn btn-primary" onClick={() => setShowForm(true)}>+ Add Transaction</button>
+          </div>
+        ) : (
+          <>
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Type</th>
+                  <th>Category</th>
+                  <th>Description</th>
+                  <th>Method</th>
+                  <th style={{ textAlign: 'right' }}>Amount</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {transactions.map(tx => (
+                  <tr key={tx._id}>
+                    <td style={{ color: 'var(--text-3)', fontSize: '0.8rem' }}>
+                      {new Date(tx.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                    </td>
+                    <td>
+                      <span className={`badge badge-${tx.type === 'income' ? 'success' : 'danger'}`}>
+                        {tx.type}
+                      </span>
+                    </td>
+                    <td style={{ fontSize: '0.85rem' }}>{tx.category}</td>
+                    <td style={{ fontSize: '0.85rem', color: 'var(--text-2)' }}>{tx.description || '—'}</td>
+                    <td style={{ fontSize: '0.8rem', color: 'var(--text-3)', textTransform: 'uppercase' }}>{tx.paymentMethod}</td>
+                    <td style={{ textAlign: 'right', fontWeight: '600', color: tx.type === 'income' ? 'var(--success)' : 'var(--danger)' }}>
+                      {tx.type === 'income' ? '+' : '−'}₹{tx.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </td>
+                    <td>
+                      <button
+                        className="btn btn-sm"
+                        style={{ color: 'var(--danger)', border: 'none', padding: '2px 6px' }}
+                        onClick={() => handleDelete(tx._id)}
+                      >
+                        🗑
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem', marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
+                <button className="btn btn-outline btn-sm" disabled={page <= 1} onClick={() => fetchTransactions(page - 1)}>← Prev</button>
+                <span style={{ padding: '0.4rem 0.75rem', fontSize: '0.85rem', color: 'var(--text-2)' }}>Page {page} of {totalPages}</span>
+                <button className="btn btn-outline btn-sm" disabled={page >= totalPages} onClick={() => fetchTransactions(page + 1)}>Next →</button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      <BadgeToast badges={newBadges} onDone={() => setNewBadges([])} />
       {toast && <div className="toast">{toast}</div>}
     </AuthGuard>
   );

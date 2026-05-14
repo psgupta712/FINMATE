@@ -102,9 +102,9 @@ export default function SubscriptionPage() {
 
         {/* Premium Plan */}
         <div className="card" style={{ border: '2px solid var(--primary)', position: 'relative' }}>
-          <div style={{ position: 'absolute', top: '-12px', left: '1.5rem', background: 'var(--primary)', borderRadius: '999px', padding: '3px 14px', fontSize: '0.72rem', fontWeight: '600', color: 'white' }}>
+          {/* <div style={{ position: 'absolute', top: '-12px', left: '1.5rem', background: 'var(--primary)', borderRadius: '999px', padding: '3px 14px', fontSize: '0.72rem', fontWeight: '600', color: 'white' }}>
             ⭐ Most Popular
-          </div>
+          </div> */}
           <div style={{ marginBottom: '1.5rem' }}>
             <h2 style={{ fontSize: '1.5rem', fontWeight: '700', marginBottom: '0.5rem' }}>Premium</h2>
             <div style={{ fontSize: '2rem', fontWeight: '800', fontFamily: 'var(--font-display)', color: 'var(--primary)' }}>₹99</div>

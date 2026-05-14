@@ -28,18 +28,9 @@ export default function Sidebar() {
 
   return (
     <aside className="sidebar">
+      {/* Logo — no theme toggle here; it lives in the top-right header */}
       <div className="sidebar-logo">
-        <span style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
-          💰 <span>Fin<b>Bot</b></span>
-        </span>
-        <button
-          className="theme-toggle"
-          onClick={toggleTheme}
-          title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-          aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-        >
-          {theme === 'dark' ? '☀️' : '🌙'}
-        </button>
+        💰 <span>Fin<b>Bot</b></span>
       </div>
 
       <nav className="sidebar-nav">
@@ -53,6 +44,17 @@ export default function Sidebar() {
             {item.label}
           </Link>
         ))}
+
+        {/* Theme toggle as a nav item at the bottom of the nav */}
+        <button
+          onClick={toggleTheme}
+          className="nav-item"
+          style={{ background: 'none', border: 'none', width: '100%', textAlign: 'left', cursor: 'pointer' }}
+          title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+        >
+          <span className="icon">{theme === 'dark' ? '☀️' : '🌙'}</span>
+          {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
+        </button>
       </nav>
 
       {user && (

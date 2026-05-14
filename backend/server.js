@@ -3,6 +3,25 @@ const dns = require('dns');
 dns.setServers(['8.8.8.8', '8.8.4.4']);
 dns.setDefaultResultOrder('ipv4first');
 
+// ✅ ENV VALIDATION — fail fast before anything loads
+const REQUIRED_ENV = [
+  'MONGO_URI',
+  'JWT_SECRET',
+  'RAZORPAY_KEY_ID',
+  'RAZORPAY_KEY_SECRET',
+  'RAZORPAY_WEBHOOK_SECRET',
+  'GROQ_API_KEY',
+  'CLIENT_URL',
+];
+
+const missing = REQUIRED_ENV.filter(k => !process.env[k]);
+if (missing.length > 0) {
+  console.error('❌ Missing required environment variables:');
+  missing.forEach(k => console.error(`   - ${k}`));
+  console.error('\n👉 Copy backend/.env.example to backend/.env and fill in all values.');
+  process.exit(1);
+}
+
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -36,9 +55,9 @@ app.use('/api/subscriptions', require('./routes/subscriptions'));
 app.use('/api/chatbot',       require('./routes/chatbot'));
 app.use('/api/dashboard',     require('./routes/dashboard'));
 app.use('/api/receipt',       require('./routes/receipt'));
-app.use('/api/streaks',       require('./routes/streaks'));  // 🎮 NEW
-app.use('/api/export', require('./routes/export'));
-
+app.use('/api/streaks',       require('./routes/streaks'));
+app.use('/api/export',        require('./routes/export'));
+app.use('/api/alerts',        require('./routes/alerts'));
 
 // ❤️ Health check
 app.get('/health', (req, res) => {
@@ -54,11 +73,17 @@ app.use((err, req, res, next) => {
   });
 });
 
+// Catch unhandled promise rejections — don't silently swallow them
+process.on('unhandledRejection', (reason) => {
+  console.error('❌ Unhandled Promise Rejection:', reason);
+});
+
 const connectDB = async () => {
   try {
     await mongoose.connect(process.env.MONGO_URI, {
       family: 4,
       serverSelectionTimeoutMS: 5000,
+      maxPoolSize: 10,
     });
     console.log('✅ MongoDB connected');
     app.listen(process.env.PORT || 5000, () => {

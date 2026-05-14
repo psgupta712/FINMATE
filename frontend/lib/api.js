@@ -112,3 +112,8 @@ export const streaksAPI = {
   me: () => fetch(`${BASE_URL}/streaks/me`, { headers: headers() }).then(handle),
   leaderboard: () => fetch(`${BASE_URL}/streaks/leaderboard`, { headers: headers() }).then(handle),
 };
+
+export const alertsAPI = {
+  get: () => fetch(`${BASE_URL}/alerts`, { headers: headers() }).then(handle),
+  summary: () => fetch(`${BASE_URL}/alerts/summary`, { headers: headers() }).then(handle),
+};

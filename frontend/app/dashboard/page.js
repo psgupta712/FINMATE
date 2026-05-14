@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import AuthGuard from '../../components/layout/AuthGuard';
 import { dashboardAPI } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
+import AlertBell from '../../components/AlertBell';
 import Link from 'next/link';
 
 const CATEGORY_COLORS = {
@@ -39,7 +40,12 @@ export default function DashboardPage() {
           <h1 className="page-title">Good {getGreeting()}, {user?.name?.split(' ')[0]} 👋</h1>
           <p className="page-subtitle">Here's your financial overview for this month</p>
         </div>
-        <Link href="/transactions" className="btn btn-primary">+ Add Transaction</Link>
+
+        {/* 🔔 Bell + Add Transaction side by side */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <AlertBell isPremium={user?.plan === 'premium'} />
+          <Link href="/transactions" className="btn btn-primary">+ Add Transaction</Link>
+        </div>
       </div>
 
       {/* Summary Cards */}

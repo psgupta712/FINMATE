@@ -3,8 +3,22 @@ const router = express.Router();
 const { protect } = require('../middleware/auth');
 const Goal = require('../models/Goal');
 
+const FREE_GOAL_LIMIT = 3;
+
 router.post('/', protect, async (req, res) => {
   try {
+    // 🔒 Enforce goal limit for free users
+    if (req.user.plan !== 'premium') {
+      const count = await Goal.countDocuments({ user: req.user._id, isCompleted: false });
+      if (count >= FREE_GOAL_LIMIT) {
+        return res.status(403).json({
+          success: false,
+          message: `Free plan allows only ${FREE_GOAL_LIMIT} active goals. Upgrade to Premium for unlimited goals!`,
+          upgradeRequired: true,
+        });
+      }
+    }
+
     const goal = await Goal.create({ user: req.user._id, ...req.body });
     res.status(201).json({ success: true, goal });
   } catch (err) {

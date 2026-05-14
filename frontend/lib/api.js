@@ -105,3 +105,10 @@ export const openRazorpayCheckout = ({ orderId, amount, keyId, name, description
   rzp.on('payment.failed', (resp) => onFailure?.(resp.error.description));
   rzp.open();
 };
+
+
+// ── STREAKS (add this block to your existing frontend/lib/api.js) ─────────────
+export const streaksAPI = {
+  me: () => fetch(`${BASE_URL}/streaks/me`, { headers: headers() }).then(handle),
+  leaderboard: () => fetch(`${BASE_URL}/streaks/leaderboard`, { headers: headers() }).then(handle),
+};

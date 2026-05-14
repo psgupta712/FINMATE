@@ -1,10 +1,6 @@
 // 🔥 DNS FIX (must be at top)
 const dns = require('dns');
-
-// Force Google DNS (fixes MongoDB SRV ECONNREFUSED)
 dns.setServers(['8.8.8.8', '8.8.4.4']);
-
-// Optional: prefer IPv4 (helps on some networks)
 dns.setDefaultResultOrder('ipv4first');
 
 const express = require('express');
@@ -16,7 +12,6 @@ require('dotenv').config();
 
 const app = express();
 
-// 🔐 Security & Middleware
 app.use(helmet());
 app.use(morgan('dev'));
 app.use(cors({
@@ -27,7 +22,6 @@ app.use(cors({
 // 💳 Razorpay webhook (raw body BEFORE json parser)
 app.use('/api/payments/webhook', express.raw({ type: 'application/json' }));
 
-// Body parsers
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -41,7 +35,11 @@ app.use('/api/payments',      require('./routes/payments'));
 app.use('/api/subscriptions', require('./routes/subscriptions'));
 app.use('/api/chatbot',       require('./routes/chatbot'));
 app.use('/api/dashboard',     require('./routes/dashboard'));
-app.use('/api/receipt', require('./routes/receipt'));
+app.use('/api/receipt',       require('./routes/receipt'));
+app.use('/api/streaks',       require('./routes/streaks'));  // 🎮 NEW
+app.use('/api/export', require('./routes/export'));
+
+
 // ❤️ Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', time: new Date() });
@@ -56,20 +54,16 @@ app.use((err, req, res, next) => {
   });
 });
 
-// 🔌 DB Connection + Server Start
 const connectDB = async () => {
   try {
     await mongoose.connect(process.env.MONGO_URI, {
-      family: 4, // force IPv4
+      family: 4,
       serverSelectionTimeoutMS: 5000,
     });
-
     console.log('✅ MongoDB connected');
-
     app.listen(process.env.PORT || 5000, () => {
       console.log(`🚀 Server running on port ${process.env.PORT || 5000}`);
     });
-
   } catch (err) {
     console.error('❌ DB connection failed:', err.message);
     console.log('🔄 Retrying connection in 5 seconds...');
@@ -78,5 +72,4 @@ const connectDB = async () => {
 };
 
 connectDB();
-
 module.exports = app;

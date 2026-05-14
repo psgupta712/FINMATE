@@ -3,6 +3,15 @@ const router = express.Router();
 const { protect } = require('../middleware/auth');
 const Transaction = require('../models/Transaction');
 const Budget = require('../models/Budget');
+const Streak = require('../models/Streak');
+const { processTransactionLog } = require('../lib/gamification');
+
+// Helper: get or create streak doc
+const getOrCreateStreak = async (userId) => {
+  let streak = await Streak.findOne({ user: userId });
+  if (!streak) streak = await Streak.create({ user: userId });
+  return streak;
+};
 
 // POST /api/transactions - Add transaction
 router.post('/', protect, async (req, res) => {
@@ -22,6 +31,17 @@ router.post('/', protect, async (req, res) => {
         if (cat) { cat.spent += amount; await budget.save(); }
       }
     }
+
+    // 🎮 Gamification: process daily streak
+    try {
+      const streak = await getOrCreateStreak(req.user._id);
+      const xpGain = type === 'income' ? 15 : 10; // income logs give slightly more XP
+      const { newBadges } = await processTransactionLog(streak, xpGain);
+      return res.status(201).json({ success: true, transaction: tx, newBadges });
+    } catch (gamErr) {
+      console.error('Gamification error (non-fatal):', gamErr.message);
+    }
+
     res.status(201).json({ success: true, transaction: tx });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

@@ -9,6 +9,7 @@ const NAV_ITEMS = [
   { href: '/budget',        icon: '📋', label: 'Budget' },
   { href: '/goals',         icon: '🎯', label: 'Goals' },
   { href: '/wallet',        icon: '👛', label: 'Wallet' },
+  { href: '/streaks',       icon: '🏆', label: 'Progress' },   // 🎮 NEW
   { href: '/chatbot',       icon: '🤖', label: 'AI Assistant' },
   { href: '/subscription',  icon: '⭐', label: 'Subscription' },
 ];
